@@ -4,7 +4,7 @@ A predictive maintenance project covering three independent industrial ML proble
 
 Project root: `Predictive Maintenance/`
 
-## Overview
+## ⚙️ Overview
 
 The project has three self-contained model pipelines, each trained on a different public dataset, plus a thin API layer that serves all three:
 
