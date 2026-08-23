@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>IMS Fault Prediction</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: var(--content-color-primary);
+    padding: var(--spacing-m, 12px);
+    font-size: 13px;
+  }
+  h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 4px;
+    color: var(--content-color-primary);
+  }
+  .subtitle {
+    font-size: 11px;
+    color: var(--content-color-secondary);
+    margin-bottom: 14px;
+  }
+  .kpi-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .kpi-card {
+    flex: 1;
+    min-width: 90px;
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 6px;
+    padding: 10px 12px;
+    text-align: center;
+  }
+  .kpi-card .kpi-value {
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .kpi-card .kpi-label {
+    font-size: 10px;
+    color: var(--content-color-secondary);
+    margin-top: 3px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+  .kpi-card.danger .kpi-value { color: #e05252; }
+  .kpi-card.safe .kpi-value { color: #4caf7d; }
+  .kpi-card.neutral .kpi-value { color: var(--content-color-primary); }
+
+  .charts-row {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 14px;
+    flex-wrap: wrap;
+  }
+  .chart-box {
+    flex: 1;
+    min-width: 160px;
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 6px;
+    padding: 10px;
+  }
+  .chart-box h3 {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--content-color-secondary);
+    margin-bottom: 8px;
+  }
+  canvas { display: block; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+  }
+  thead th {
+    background: var(--background-color-secondary, #f5f5f5);
+    color: var(--content-color-secondary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 10px;
+    letter-spacing: 0.05em;
+    padding: 7px 10px;
+    text-align: left;
+    border-bottom: 1px solid var(--border-color-default, #ddd);
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { color: var(--content-color-primary); }
+  tbody tr {
+    border-bottom: 1px solid var(--border-color-default, #ddd);
+    transition: background 0.15s;
+  }
+  tbody tr:hover { background: var(--background-color-secondary, #f5f5f5); }
+  tbody td { padding: 7px 10px; }
+  .badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.03em;
+  }
+  .badge.anomaly { background: #fde8e8; color: #c0392b; }
+  .badge.normal  { background: #e8f5e9; color: #2e7d32; }
+  .score-bar-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .score-bar-bg {
+    flex: 1;
+    height: 6px;
+    background: var(--border-color-default, #ddd);
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .score-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .score-val { font-size: 11px; min-width: 42px; text-align: right; }
+  .run-tag {
+    display: inline-block;
+    background: var(--background-color-secondary, #eee);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 4px;
+    padding: 2px 8px;
+    font-size: 11px;
+    font-weight: 600;
+    margin-bottom: 14px;
+  }
+  .section-title {
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--content-color-secondary);
+    margin-bottom: 6px;
+  }
+</style>
+</head>
+<body>
+
+<h2>IMS Fault Prediction</h2>
+<div class="subtitle">POST /predict/ims &nbsp;·&nbsp; Status 200 OK &nbsp;·&nbsp; 4 channels</div>
+
+<span class="run-tag">Run: 2nd_test</span>
+
+<div class="kpi-row">
+  <div class="kpi-card danger">
+    <div class="kpi-value">4</div>
+    <div class="kpi-label">Anomalies</div>
+  </div>
+  <div class="kpi-card safe">
+    <div class="kpi-value">0</div>
+    <div class="kpi-label">Normal</div>
+  </div>
+  <div class="kpi-card neutral">
+    <div class="kpi-value">0.177</div>
+    <div class="kpi-label">Avg Score</div>
+  </div>
+  <div class="kpi-card neutral">
+    <div class="kpi-value">100%</div>
+    <div class="kpi-label">Anomaly Rate</div>
+  </div>
+</div>
+
+<div class="charts-row">
+  <div class="chart-box" style="max-width:220px;">
+    <h3>Status Breakdown</h3>
+    <canvas id="donutChart" width="180" height="140" role="img" aria-label="Anomaly vs Normal donut chart"></canvas>
+  </div>
+  <div class="chart-box" style="flex:2;">
+    <h3>Anomaly Score per Channel</h3>
+    <canvas id="barChart" width="300" height="140" role="img" aria-label="Bar chart of anomaly scores per channel"></canvas>
+  </div>
+</div>
+
+<div class="section-title">Channel Details</div>
+<table id="resultsTable">
+  <thead>
+    <tr>
+      <th onclick="sortTable(0)">Channel ↕</th>
+      <th onclick="sortTable(1)">Anomaly Score ↕</th>
+      <th onclick="sortTable(2)">Status ↕</th>
+      <th onclick="sortTable(3)">Model Predict ↕</th>
+    </tr>
+  </thead>
+  <tbody id="tableBody"></tbody>
+</table>
+
+<script>
+const data = [
+  { channel: "channel_1", anomaly_score: 0.18128406750186432, is_anomaly: true, model_predict: -1 },
+  { channel: "channel_2", anomaly_score: 0.18236694959183453, is_anomaly: true, model_predict: -1 },
+  { channel: "channel_3", anomaly_score: 0.17765832958031214, is_anomaly: true, model_predict: -1 },
+  { channel: "channel_4", anomaly_score: 0.16588506940668002, is_anomaly: true, model_predict: -1 }
+];
+
+const ANOMALY_COLOR = '#e05252';
+const NORMAL_COLOR  = '#4caf7d';
+const SCORE_COLOR   = '#5b8dee';
+
+// --- Donut Chart ---
+const donutCtx = document.getElementById('donutChart').getContext('2d');
+new Chart(donutCtx, {
+  type: 'doughnut',
+  data: {
+    labels: ['Anomaly', 'Normal'],
+    datasets: [{
+      data: [4, 0],
+      backgroundColor: [ANOMALY_COLOR, NORMAL_COLOR],
+      borderWidth: 2,
+      borderColor: 'transparent',
+      hoverOffset: 6
+    }]
+  },
+  options: {
+    responsive: false,
+    cutout: '62%',
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: {
+          font: { size: 11 },
+          color: getComputedStyle(document.body).getPropertyValue('--content-color-primary') || '#333',
+          boxWidth: 12,
+          padding: 8
+        }
+      },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` ${ctx.label}: ${ctx.parsed}`
+        }
+      }
+    }
+  }
+});
+
+// --- Bar Chart ---
+const barCtx = document.getElementById('barChart').getContext('2d');
+new Chart(barCtx, {
+  type: 'bar',
+  data: {
+    labels: data.map(d => d.channel.replace('channel_', 'Ch ')),
+    datasets: [{
+      label: 'Anomaly Score',
+      data: data.map(d => +d.anomaly_score.toFixed(5)),
+      backgroundColor: data.map(d => d.is_anomaly ? ANOMALY_COLOR : NORMAL_COLOR),
+      borderRadius: 4,
+      borderSkipped: false
+    }]
+  },
+  options: {
+    responsive: false,
+    plugins: {
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: ctx => ` Score: ${ctx.parsed.y.toFixed(5)}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        ticks: { font: { size: 11 }, color: '#888' },
+        grid: { display: false }
+      },
+      y: {
+        min: 0.15,
+        max: 0.20,
+        ticks: { font: { size: 10 }, color: '#888', callback: v => v.toFixed(3) },
+        grid: { color: 'rgba(128,128,128,0.15)' }
+      }
+    }
+  }
+});
+
+// --- Table ---
+const maxScore = Math.max(...data.map(d => d.anomaly_score));
+const tbody = document.getElementById('tableBody');
+
+function renderTable(rows) {
+  tbody.innerHTML = '';
+  rows.forEach(d => {
+    const pct = ((d.anomaly_score / maxScore) * 100).toFixed(1);
+    const fillColor = d.is_anomaly ? ANOMALY_COLOR : NORMAL_COLOR;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><strong>${d.channel}</strong></td>
+      <td>
+        <div class="score-bar-wrap">
+          <div class="score-bar-bg">
+            <div class="score-bar-fill" style="width:${pct}%;background:${fillColor}"></div>
+          </div>
+          <span class="score-val">${d.anomaly_score.toFixed(5)}</span>
+        </div>
+      </td>
+      <td><span class="badge ${d.is_anomaly ? 'anomaly' : 'normal'}">${d.is_anomaly ? 'Anomaly' : 'Normal'}</span></td>
+      <td style="font-family:monospace">${d.model_predict}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+renderTable(data);
+
+// --- Sort ---
+let sortDir = [1,1,1,1];
+function sortTable(col) {
+  const keys = ['channel','anomaly_score','is_anomaly','model_predict'];
+  const key = keys[col];
+  sortDir[col] *= -1;
+  const sorted = [...data].sort((a,b) => {
+    if (a[key] < b[key]) return -1 * sortDir[col];
+    if (a[key] > b[key]) return  1 * sortDir[col];
+    return 0;
+  });
+  renderTable(sorted);
+}
+</script>
+</body>
+</html>

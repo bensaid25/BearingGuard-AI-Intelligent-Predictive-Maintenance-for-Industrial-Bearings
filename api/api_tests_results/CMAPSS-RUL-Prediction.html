@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--content-color-primary, #212121);
+    padding: var(--spacing-m, 16px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-m, 16px);
+    min-height: 100vh;
+  }
+
+  .header {
+    text-align: center;
+  }
+
+  .header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--content-color-secondary, #6b6b6b);
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .header p {
+    font-size: 0.75rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    margin-top: 4px;
+  }
+
+  .kpi-card {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #e0e0e0);
+    border-radius: 12px;
+    padding: 32px 48px;
+    text-align: center;
+    width: 100%;
+    max-width: 360px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .kpi-card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+
+  .status-critical {
+    background: #fff0f0;
+    color: #c0392b;
+    border: 1px solid #f5c6c6;
+  }
+
+  .status-healthy {
+    background: #f0fff4;
+    color: #27ae60;
+    border: 1px solid #b2dfdb;
+  }
+
+  .status-warning {
+    background: #fffbf0;
+    color: #e67e22;
+    border: 1px solid #fde8b0;
+  }
+
+  .rul-value {
+    font-size: 3.5rem;
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 8px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .rul-value.critical { color: #c0392b; }
+  .rul-value.healthy  { color: #27ae60; }
+  .rul-value.warning  { color: #e67e22; }
+
+  .rul-unit {
+    font-size: 0.85rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    margin-bottom: 20px;
+  }
+
+  .gauge-wrap {
+    width: 100%;
+    margin: 12px 0 8px;
+  }
+
+  .gauge-track {
+    height: 10px;
+    background: var(--border-color-default, #e0e0e0);
+    border-radius: 5px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .gauge-fill {
+    height: 100%;
+    border-radius: 5px;
+    transition: width 0.8s cubic-bezier(.4,0,.2,1);
+  }
+
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.65rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    margin-top: 4px;
+  }
+
+  .meta-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    width: 100%;
+    max-width: 360px;
+  }
+
+  .meta-item {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #e0e0e0);
+    border-radius: 8px;
+    padding: 10px 14px;
+    text-align: left;
+  }
+
+  .meta-label {
+    font-size: 0.65rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 4px;
+  }
+
+  .meta-value {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--content-color-primary, #212121);
+  }
+
+  .note {
+    font-size: 0.7rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    text-align: center;
+    max-width: 360px;
+    line-height: 1.5;
+    padding: 8px 12px;
+    background: var(--background-color-secondary, #f5f5f5);
+    border-radius: 8px;
+    border: 1px solid var(--border-color-default, #e0e0e0);
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>CMAPSS RUL Prediction</h2>
+  <p>POST /predict/cmapss &nbsp;·&nbsp; HTTP 200 OK</p>
+</div>
+
+<div class="kpi-card" role="img" aria-label="Predicted Remaining Useful Life: -0.1198 (normalized). Status: Critical — component at or past end of life.">
+  <div class="status-badge status-critical" id="statusBadge">Critical</div>
+
+  <div class="rul-value critical" id="rulValue">-0.120</div>
+  <div class="rul-unit">predicted_rul (normalized)</div>
+
+  <div class="gauge-wrap">
+    <div class="gauge-track">
+      <div class="gauge-fill" id="gaugeFill" style="width: 0%; background: #c0392b;"></div>
+    </div>
+    <div class="gauge-labels">
+      <span>End of Life (≤0)</span>
+      <span>Healthy (≥1)</span>
+    </div>
+  </div>
+</div>
+
+<div class="meta-grid">
+  <div class="meta-item">
+    <div class="meta-label">Raw Value</div>
+    <div class="meta-value">-0.11979</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Status</div>
+    <div class="meta-value" style="color:#c0392b;">⚠ End of Life</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">Endpoint</div>
+    <div class="meta-value">/predict/cmapss</div>
+  </div>
+  <div class="meta-item">
+    <div class="meta-label">HTTP Status</div>
+    <div class="meta-value" style="color:#27ae60;">200 OK</div>
+  </div>
+</div>
+
+<div class="note">
+  A normalized RUL ≤ 0 indicates the component has reached or exceeded its predicted end-of-life threshold. Values closer to 1 indicate a healthy component with significant remaining life.
+</div>
+
+<script>
+  (function() {
+    const raw = -0.11979334056377411;
+
+    // Clamp to [0, 1] for gauge display — negative means 0%
+    const pct = Math.max(0, Math.min(1, raw)) * 100;
+
+    // Animate gauge fill after a short delay
+    setTimeout(function() {
+      var fill = document.getElementById('gaugeFill');
+      if (fill) fill.style.width = pct.toFixed(1) + '%';
+    }, 200);
+  })();
+</script>
+</body>
+</html>

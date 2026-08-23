@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CWRU Fault Prediction</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: sans-serif; color: var(--content-color-primary); padding: var(--spacing-m, 12px); }
+  h3 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; color: var(--content-color-primary); }
+  .subtitle { font-size: 0.75rem; color: var(--content-color-secondary); margin-bottom: 14px; }
+  .kpi-card {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 14px;
+  }
+  .kpi-badge {
+    background: #4f46e5; color: #fff;
+    border-radius: 6px; padding: 4px 10px;
+    font-size: 1rem; font-weight: 700; letter-spacing: 0.5px;
+  }
+  .kpi-label { font-size: 0.8rem; color: var(--content-color-secondary); }
+  .kpi-conf { font-size: 1.1rem; font-weight: 700; color: #4f46e5; }
+  .layout { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+  .chart-wrap { flex: 0 0 200px; max-width: 200px; }
+  canvas { width: 100% !important; height: auto !important; }
+  table { border-collapse: collapse; width: 100%; font-size: 0.8rem; }
+  th { text-align: left; padding: 5px 8px; border-bottom: 2px solid var(--border-color-default, #ddd); color: var(--content-color-secondary); font-weight: 600; cursor: pointer; user-select: none; }
+  th:hover { color: var(--content-color-primary); }
+  td { padding: 5px 8px; border-bottom: 1px solid var(--border-color-default, #eee); }
+  tr:last-child td { border-bottom: none; }
+  .bar-bg { background: var(--background-color-secondary, #eee); border-radius: 4px; height: 8px; width: 100%; min-width: 80px; }
+  .bar-fill { height: 8px; border-radius: 4px; transition: width 0.4s ease; }
+  .highlight td { font-weight: 700; }
+  .status { font-size: 0.7rem; color: var(--content-color-secondary); margin-top: 10px; }
+  .table-wrap { flex: 1; min-width: 200px; }
+</style>
+</head>
+<body>
+<h3>CWRU Bearing Fault Prediction</h3>
+<p class="subtitle">POST /predict/cwru &nbsp;·&nbsp; Status 200 OK</p>
+
+<div class="kpi-card">
+  <div>
+    <div class="kpi-label">Predicted Class</div>
+    <div class="kpi-badge">Ball</div>
+  </div>
+  <div style="margin-left:auto; text-align:right;">
+    <div class="kpi-label">Confidence</div>
+    <div class="kpi-conf">99.93%</div>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="chart-wrap">
+    <canvas id="donut" role="img" aria-label="Probability distribution across fault classes"></canvas>
+  </div>
+  <div class="table-wrap">
+    <table id="probTable">
+      <thead>
+        <tr>
+          <th onclick="sortTable(0)">Class ↕</th>
+          <th onclick="sortTable(1)">Probability ↕</th>
+          <th>Distribution</th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+<p class="status">4 classes · 1 prediction · probabilities sum to 1.0</p>
+
+<script>
+  const rawData = [
+    { label: "Ball",       prob: 0.9992532134056091,   color: "#4f46e5" },
+    { label: "OuterRace",  prob: 0.0005311983404681087, color: "#f59e0b" },
+    { label: "InnerRace",  prob: 0.00011845540575450286,color: "#10b981" },
+    { label: "Normal",     prob: 0.00009714518819237128, color: "#6b7280" }
+  ];
+
+  // Build table
+  const tbody = document.getElementById("tbody");
+  rawData.forEach(d => {
+    const pct = (d.prob * 100).toFixed(4);
+    const barW = Math.max(d.prob * 100, 0.3).toFixed(2);
+    const tr = document.createElement("tr");
+    if (d.label === "Ball") tr.className = "highlight";
+    tr.innerHTML = `
+      <td>${d.label}</td>
+      <td>${pct}%</td>
+      <td>
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${barW}%;background:${d.color};"></div>
+        </div>
+      </td>`;
+    tbody.appendChild(tr);
+  });
+
+  // Sort table
+  let sortDir = [1, 1];
+  function sortTable(col) {
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    rows.sort((a, b) => {
+      const va = a.cells[col].textContent.replace('%','');
+      const vb = b.cells[col].textContent.replace('%','');
+      const diff = isNaN(va) ? va.localeCompare(vb) : parseFloat(va) - parseFloat(vb);
+      return diff * sortDir[col];
+    });
+    sortDir[col] *= -1;
+    rows.forEach(r => tbody.appendChild(r));
+  }
+
+  // Donut chart
+  const ctx = document.getElementById("donut").getContext("2d");
+  new Chart(ctx, {
+    type: "doughnut",
+    data: {
+      labels: rawData.map(d => d.label),
+      datasets: [{
+        data: rawData.map(d => d.prob),
+        backgroundColor: rawData.map(d => d.color),
+        borderWidth: 2,
+        borderColor: "transparent",
+        hoverOffset: 6
+      }]
+    },
+    options: {
+      responsive: true,
+      cutout: "65%",
+      plugins: {
+        legend: {
+          position: "bottom",
+          labels: {
+            font: { size: 11 },
+            color: getComputedStyle(document.body).getPropertyValue("--content-color-primary") || "#333",
+            padding: 8,
+            boxWidth: 12
+          }
+        },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${(ctx.parsed * 100).toFixed(4)}%`
+          }
+        }
+      }
+    }
+  });
+</script>
+</body>
+</html>

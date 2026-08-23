@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CMAPSS RUL Prediction</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: var(--content-color-primary, #212121);
+    padding: var(--spacing-m, 16px);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    min-height: 100vh;
+  }
+
+  .header {
+    text-align: center;
+  }
+
+  .header h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--content-color-secondary, #6b6b6b);
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .kpi-card {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #e0e0e0);
+    border-radius: 16px;
+    padding: 36px 48px;
+    text-align: center;
+    width: 100%;
+    max-width: 380px;
+    position: relative;
+    overflow: hidden;
+    transition: box-shadow 0.2s ease;
+  }
+
+  .kpi-card:hover {
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+  }
+
+  .kpi-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--content-color-secondary, #6b6b6b);
+    margin-bottom: 12px;
+  }
+
+  .kpi-value {
+    font-size: 3.8rem;
+    font-weight: 700;
+    line-height: 1;
+    color: #4f8ef7;
+    letter-spacing: -1px;
+  }
+
+  .kpi-unit {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--content-color-secondary, #6b6b6b);
+    margin-top: 8px;
+  }
+
+  .gauge-wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .gauge-track {
+    background: var(--border-color-default, #e0e0e0);
+    border-radius: 999px;
+    height: 14px;
+    overflow: hidden;
+    position: relative;
+  }
+
+  .gauge-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(90deg, #f44336 0%, #ff9800 35%, #4caf50 70%, #4f8ef7 100%);
+    width: 0%;
+    transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .gauge-labels {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 6px;
+    font-size: 0.72rem;
+    color: var(--content-color-secondary, #6b6b6b);
+  }
+
+  .status-badge {
+    display: inline-block;
+    padding: 4px 14px;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    margin-top: 14px;
+    letter-spacing: 0.04em;
+  }
+
+  .status-good { background: #e8f5e9; color: #2e7d32; }
+  .status-warn { background: #fff3e0; color: #e65100; }
+  .status-crit { background: #ffebee; color: #c62828; }
+
+  .meta-row {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+    justify-content: center;
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .meta-chip {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #e0e0e0);
+    border-radius: 8px;
+    padding: 8px 16px;
+    font-size: 0.78rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    flex: 1;
+    min-width: 100px;
+    text-align: center;
+  }
+
+  .meta-chip strong {
+    display: block;
+    font-size: 1rem;
+    color: var(--content-color-primary, #212121);
+    margin-bottom: 2px;
+  }
+
+  .caption {
+    font-size: 0.72rem;
+    color: var(--content-color-secondary, #6b6b6b);
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h2>CMAPSS RUL Prediction</h2>
+</div>
+
+<div class="kpi-card" role="img" aria-label="Predicted Remaining Useful Life: 114.71 cycles">
+  <div class="kpi-label">Predicted Remaining Useful Life</div>
+  <div class="kpi-value" id="rulValue">—</div>
+  <div class="kpi-unit">cycles</div>
+  <div id="statusBadge" class="status-badge"></div>
+</div>
+
+<div class="gauge-wrap" role="img" aria-label="RUL gauge showing health level">
+  <div class="gauge-track">
+    <div class="gauge-fill" id="gaugeFill"></div>
+  </div>
+  <div class="gauge-labels">
+    <span>Critical (0)</span>
+    <span>Warning (50)</span>
+    <span>Healthy (125+)</span>
+  </div>
+</div>
+
+<div class="meta-row">
+  <div class="meta-chip">
+    <strong>200 OK</strong>
+    HTTP Status
+  </div>
+  <div class="meta-chip">
+    <strong>POST</strong>
+    Method
+  </div>
+  <div class="meta-chip">
+    <strong>/predict/cmapss</strong>
+    Endpoint
+  </div>
+</div>
+
+<div class="caption">Response from http://127.0.0.1:8000/predict/cmapss &nbsp;·&nbsp; Status 200</div>
+
+<script>
+  const rul = 114.70838165283203;
+  const maxRul = 150;
+
+  // Animate value counter
+  const valueEl = document.getElementById('rulValue');
+  const duration = 1200;
+  const start = performance.now();
+  function animateValue(ts) {
+    const elapsed = ts - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    valueEl.textContent = (rul * eased).toFixed(2);
+    if (progress < 1) requestAnimationFrame(animateValue);
+    else valueEl.textContent = rul.toFixed(2);
+  }
+  requestAnimationFrame(animateValue);
+
+  // Gauge fill
+  const pct = Math.min((rul / maxRul) * 100, 100);
+  setTimeout(() => {
+    document.getElementById('gaugeFill').style.width = pct + '%';
+  }, 100);
+
+  // Status badge
+  const badge = document.getElementById('statusBadge');
+  if (rul < 30) {
+    badge.textContent = '⚠ Critical — Immediate Attention';
+    badge.className = 'status-badge status-crit';
+  } else if (rul < 70) {
+    badge.textContent = '⚡ Warning — Monitor Closely';
+    badge.className = 'status-badge status-warn';
+  } else {
+    badge.textContent = '✓ Healthy — Operating Normally';
+    badge.className = 'status-badge status-good';
+  }
+</script>
+</body>
+</html>

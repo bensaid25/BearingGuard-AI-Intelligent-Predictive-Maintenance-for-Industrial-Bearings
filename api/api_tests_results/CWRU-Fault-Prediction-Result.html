@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>CWRU Fault Prediction</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: var(--content-color-primary);
+    padding: var(--spacing-m, 16px);
+    font-size: 13px;
+  }
+  h2 {
+    font-size: 15px;
+    font-weight: 600;
+    margin-bottom: 12px;
+    color: var(--content-color-primary);
+  }
+  .caption {
+    font-size: 11px;
+    color: var(--content-color-secondary, #888);
+    margin-bottom: 14px;
+  }
+  .kpi-card {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .kpi-badge {
+    background: #e07b39;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 14px;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+  }
+  .kpi-meta { flex: 1; }
+  .kpi-label {
+    font-size: 11px;
+    color: var(--content-color-secondary, #888);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+  }
+  .kpi-conf {
+    font-size: 22px;
+    font-weight: 700;
+    color: #e07b39;
+  }
+  .kpi-conf-label {
+    font-size: 11px;
+    color: var(--content-color-secondary, #888);
+  }
+  .charts-row {
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+  .chart-box {
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 8px;
+    padding: 12px;
+    flex: 1;
+    min-width: 180px;
+  }
+  .chart-title {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--content-color-primary);
+  }
+  canvas { display: block; width: 100% !important; }
+  .table-box {
+    margin-top: 16px;
+    background: var(--background-color-secondary, #f5f5f5);
+    border: 1px solid var(--border-color-default, #ddd);
+    border-radius: 8px;
+    overflow: hidden;
+  }
+  table { width: 100%; border-collapse: collapse; }
+  th {
+    background: var(--background-color-primary, #eee);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.4px;
+    padding: 7px 12px;
+    text-align: left;
+    color: var(--content-color-secondary, #888);
+    border-bottom: 1px solid var(--border-color-default, #ddd);
+  }
+  td {
+    padding: 7px 12px;
+    font-size: 12px;
+    border-bottom: 1px solid var(--border-color-default, #ddd);
+    color: var(--content-color-primary);
+  }
+  tr:last-child td { border-bottom: none; }
+  .bar-cell { width: 120px; }
+  .bar-bg {
+    background: var(--background-color-primary, #e0e0e0);
+    border-radius: 4px;
+    height: 8px;
+    overflow: hidden;
+  }
+  .bar-fill {
+    height: 8px;
+    border-radius: 4px;
+    transition: width 0.6s ease;
+  }
+  .highlight td { font-weight: 700; }
+  .highlight .bar-fill { background: #e07b39; }
+  .status-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 6px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<h2>CWRU Bearing Fault Prediction</h2>
+<p class="caption">POST /predict/cwru &nbsp;·&nbsp; Status 200 &nbsp;·&nbsp; 4 classes</p>
+
+<div class="kpi-card">
+  <div>
+    <div class="kpi-label">Predicted Fault Class</div>
+    <div class="kpi-badge">⚠ OuterRace</div>
+  </div>
+  <div class="kpi-meta" style="text-align:right;">
+    <div class="kpi-label">Confidence</div>
+    <div class="kpi-conf">99.62%</div>
+    <div class="kpi-conf-label">model probability</div>
+  </div>
+</div>
+
+<div class="charts-row">
+  <div class="chart-box" style="max-width:200px;">
+    <div class="chart-title">Class Distribution</div>
+    <canvas id="doughnut" height="180" role="img" aria-label="Doughnut chart of class probabilities"></canvas>
+  </div>
+  <div class="chart-box">
+    <div class="chart-title">Probability per Class</div>
+    <canvas id="bar" height="160" role="img" aria-label="Bar chart of class probabilities"></canvas>
+  </div>
+</div>
+
+<div class="table-box">
+  <table>
+    <thead>
+      <tr>
+        <th>Class</th>
+        <th>Probability</th>
+        <th class="bar-cell">Confidence</th>
+      </tr>
+    </thead>
+    <tbody id="prob-table"></tbody>
+  </table>
+</div>
+
+<script>
+  const probs = {
+    "OuterRace": 0.9961786270141602,
+    "InnerRace": 0.002188560087233782,
+    "Ball":      0.001393366837874055,
+    "Normal":    0.000239447588683106
+  };
+  const predicted = "OuterRace";
+  const labels = Object.keys(probs).sort((a,b) => probs[b]-probs[a]);
+  const values = labels.map(l => probs[l]);
+  const palette = {
+    "OuterRace": "#e07b39",
+    "InnerRace": "#4a90d9",
+    "Ball":      "#7cb87c",
+    "Normal":    "#9b7ec8"
+  };
+  const colors = labels.map(l => palette[l] || "#aaa");
+
+  // Doughnut
+  new Chart(document.getElementById('doughnut'), {
+    type: 'doughnut',
+    data: {
+      labels: labels,
+      datasets: [{ data: values, backgroundColor: colors, borderWidth: 2, borderColor: 'transparent' }]
+    },
+    options: {
+      cutout: '62%',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${(ctx.parsed * 100).toFixed(3)}%`
+          }
+        }
+      },
+      animation: { animateRotate: true, duration: 800 }
+    }
+  });
+
+  // Bar
+  new Chart(document.getElementById('bar'), {
+    type: 'bar',
+    data: {
+      labels: labels,
+      datasets: [{
+        data: values.map(v => +(v * 100).toFixed(4)),
+        backgroundColor: colors,
+        borderRadius: 4,
+        borderSkipped: false
+      }]
+    },
+    options: {
+      indexAxis: 'y',
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          callbacks: {
+            label: ctx => ` ${ctx.parsed.x.toFixed(4)}%`
+          }
+        }
+      },
+      scales: {
+        x: {
+          min: 0, max: 100,
+          ticks: { callback: v => v + '%', font: { size: 10 } },
+          grid: { color: 'rgba(128,128,128,0.15)' }
+        },
+        y: {
+          ticks: { font: { size: 11 } },
+          grid: { display: false }
+        }
+      },
+      animation: { duration: 800 }
+    }
+  });
+
+  // Table
+  const tbody = document.getElementById('prob-table');
+  labels.forEach(cls => {
+    const pct = (probs[cls] * 100).toFixed(4);
+    const barW = (probs[cls] * 100).toFixed(2);
+    const isHighlight = cls === predicted;
+    const tr = document.createElement('tr');
+    if (isHighlight) tr.className = 'highlight';
+    tr.innerHTML = `
+      <td><span class="status-dot" style="background:${palette[cls]}"></span>${cls}${isHighlight ? ' ✓' : ''}</td>
+      <td>${pct}%</td>
+      <td class="bar-cell">
+        <div class="bar-bg">
+          <div class="bar-fill" style="width:${barW}%;background:${isHighlight ? '#e07b39' : palette[cls]};opacity:0.85;"></div>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+</script>
+</body>
+</html>
