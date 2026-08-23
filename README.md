@@ -1,4 +1,4 @@
-# Predictive Maintenance
+# Predictive Maintenance 🤖🔧
 
 A predictive maintenance project covering three independent industrial ML problems — bearing fault classification, bearing anomaly detection, and turbofan remaining-useful-life prediction — served through a single FastAPI backend.
 
