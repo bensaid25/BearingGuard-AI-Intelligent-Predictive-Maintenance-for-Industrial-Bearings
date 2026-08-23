@@ -16,7 +16,7 @@ The project has three self-contained model pipelines, each trained on a differen
 
 The API layer is intentionally minimal: it loads the already-trained production models and exposes them over HTTP. It does **not** retrain or modify any model, and does not include the ESP32/IoT ingestion hardware or a dashboard — those are explicitly out of scope for this phase.
 
-## Status
+## ⚙️ Status
 
 - All three model pipelines have production artifacts saved under `models/production/` and are loaded and serving successfully.
 - The FastAPI backend (`/health` + three `/predict/*` endpoints) is built and verified end-to-end against real data via Postman:
@@ -26,7 +26,7 @@ The API layer is intentionally minimal: it loads the already-trained production 
 - Automated pytest suite: **13 passed, 0 failed** against the real app and real models (no mocking).
 - An optional agentic layer (LLM-based classifier agent → predictor agent, via local Ollama) was prototyped but is **not wired into the running service** — the project deliberately stayed a plain FastAPI service for simplicity given time constraints.
 
-## Project structure
+## ⚙️ Project structure
 
 ```
 models/
@@ -52,7 +52,7 @@ agents/                    # Prototype only, NOT wired into api/app.py (see belo
   llm_client.py, classifier_agent.py, predictor_agent.py, router.py
 ```
 
-## Models
+## ⚙️ Models
 
 ### CWRU — Bearing Fault Classification
 A custom XGBoost wrapper (`src.models.xgb_wrapper.XGBStringClassifier`) classifying bearing condition from 12 pre-computed vibration features (`rms, kurtosis, skewness, peak_to_peak, std, dominant_freq, spectral_energy, spectral_centroid, energy_0_1000, energy_1000_2500, energy_2500_5000, load`), standardized with a saved `StandardScaler`.
@@ -63,7 +63,7 @@ An LSTM (`best.keras`, named `baseline_lstm`) predicting RUL from a 30-cycle seq
 ### IMS — Unsupervised Anomaly Detection
 A separate IsolationForest + StandardScaler pair per experimental run (`1st_test`, `2nd_test`, `3rd_test`), scoring 11 features per channel (8 time-domain + 3 frequency-domain) computed from raw 20,480-sample vibration snapshots. Anomaly score is `-model.decision_function(...)` (higher = more anomalous); the anomaly flag is the IsolationForest's own `predict()` output, with no additional threshold applied.
 
-## API
+## ⚙️ API
 
 ### `GET /health`
 Reports load status for all three production models.
@@ -77,7 +77,7 @@ Takes the **raw vibration signal per channel**; the API computes all 11 features
 ### `POST /predict/cmapss`
 Takes already-engineered 225-feature rows for the last 30 cycles; the API only scales and stacks them into the (30, 225) sequence — no raw feature engineering happens in the API.
 
-## Running locally
+## ⚙️ Running locally
 
 ```bash
 uvicorn api.app:app --reload
