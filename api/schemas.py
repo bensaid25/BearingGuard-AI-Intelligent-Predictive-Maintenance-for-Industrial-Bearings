@@ -11,6 +11,7 @@ Nothing in this file loads a model or does any inference -- it only
 validates data going in and structures data coming out.
 """
 
+from datetime import datetime
 from typing import Dict, List, Literal, Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -201,3 +202,63 @@ class IMSChannelResult(BaseModel):
 class IMSResponse(BaseModel):
     run: str
     results: List[IMSChannelResult]
+
+
+# ---------------------------------------------------------------------------
+# Sensor ingestion (ESP32 + MPU6050) -- INGESTION ONLY, no anomaly scoring.
+# ---------------------------------------------------------------------------
+# IMPORTANT: this is deliberately NOT wired to the existing IMS scaler /
+# IsolationForest. Those were calibrated on a specific bearing test rig
+# sampled at 20,000 Hz over fixed 20,480-sample windows -- an ESP32 +
+# MPU6050 on an arbitrary motor, sampled at an arbitrary rate, is a
+# different sensor on different hardware. Reusing that pretrained model
+# here would silently produce meaningless anomaly scores. See
+# api/inference_sensor.py for the full explanation. This endpoint only
+# validates and accepts the data, and computes DIAGNOSTIC feature values
+# (reusing the exact same feature-computation functions IMS uses) --
+# it does not classify anything as anomalous.
+class SensorSample(BaseModel):
+    """One raw 3-axis accelerometer reading from the MPU6050."""
+    ax: float
+    ay: float
+    az: float
+
+
+class SensorVibrationRequest(BaseModel):
+    """Request for POST /sensor-data -- a window of raw ESP32/MPU6050 samples."""
+    device_id: str = Field(..., min_length=1)
+    timestamp: datetime
+    sampling_rate_hz: float = Field(..., gt=0)
+    samples: List[SensorSample] = Field(..., min_length=1)
+
+
+class AxisFeatureSummary(BaseModel):
+    """Diagnostic time/frequency-domain features for one axis, computed with
+    the SAME functions api/inference_ims.py uses -- not a calibrated
+    anomaly score, just descriptive statistics of the received window."""
+    mean: float
+    std: float
+    rms: float
+    peak_abs_amplitude: float
+    peak_to_peak: float
+    skewness: float
+    kurtosis: float
+    crest_factor: float
+    dominant_frequency_hz: float
+    spectral_energy: float
+    spectral_centroid_hz: float
+
+
+class SensorVibrationResponse(BaseModel):
+    device_id: str
+    timestamp: datetime
+    samples_received: int
+    status: Literal["received"]
+    feature_summary: Dict[Literal["ax", "ay", "az"], AxisFeatureSummary]
+    note: str = (
+        "feature_summary is diagnostic only (same feature math as the IMS "
+        "pipeline). No anomaly score is returned: the existing IMS "
+        "scaler/model were calibrated on different hardware (a 20kHz "
+        "bearing test rig) and are not valid for this sensor without a "
+        "new baseline/calibration."
+    )
