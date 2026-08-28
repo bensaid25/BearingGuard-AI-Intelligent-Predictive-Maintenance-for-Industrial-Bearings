@@ -24,6 +24,7 @@ from fastapi import FastAPI, HTTPException
 from .inference_cmapss import predict_cmapss
 from .inference_cwru import predict_cwru
 from .inference_ims import predict_ims
+from .inference_sensor import process_sensor_data
 from .model_loader import load_all_models
 from .schemas import (
     CMAPSSRequest,
@@ -33,6 +34,8 @@ from .schemas import (
     HealthResponse,
     IMSRequest,
     IMSResponse,
+    SensorVibrationRequest,
+    SensorVibrationResponse,
 )
 
 logging.basicConfig(
@@ -144,3 +147,22 @@ def predict_ims_endpoint(request: IMSRequest) -> IMSResponse:
     except Exception as exc:
         logger.exception("IMS prediction failed")
         raise HTTPException(status_code=500, detail=f"IMS prediction failed: {exc}")
+
+
+@app.post("/sensor-data", response_model=SensorVibrationResponse)
+def sensor_data_endpoint(request: SensorVibrationRequest) -> SensorVibrationResponse:
+    """Ingests a raw ESP32/MPU6050 vibration window. Validates input and
+    returns diagnostic per-axis features (reusing the IMS feature-
+    computation code) -- does NOT run anomaly scoring. See
+    api/inference_sensor.py for why that's deliberately deferred."""
+    logger.info(
+        "Received /sensor-data request (device_id=%s, samples=%d)",
+        request.device_id, len(request.samples),
+    )
+    try:
+        return process_sensor_data(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Sensor data processing failed")
+        raise HTTPException(status_code=500, detail=f"Sensor data processing failed: {exc}")
