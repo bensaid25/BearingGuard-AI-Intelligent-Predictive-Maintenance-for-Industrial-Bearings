@@ -2,22 +2,27 @@
 api/app.py
 ==========
 
-The FastAPI application itself. At this stage it only:
+The FastAPI application itself. At this stage it:
   - Loads every production model + scaler ONCE, at startup (via
     api/model_loader.py).
   - Exposes GET /health, which reports whether that loading succeeded.
-
-Prediction endpoints (/predict/cwru, /predict/cmapss, /predict/ims) are
-deliberately NOT implemented yet -- those come once the inference modules
-are built.
+  - Exposes the /predict/* endpoints and /sensor-data ingestion.
+  - Caches the most recent /sensor-data reading in memory, so a dashboard
+    can poll GET /sensor-data/latest to show live vibration values without
+    needing its own separate storage layer. This is intentionally a plain
+    in-memory cache (not a database) -- it exists purely for live display,
+    holds at most SENSOR_HISTORY_MAXLEN points, and is lost on restart.
+    It is NOT used for anomaly scoring or any /predict/* logic.
 
 Run with (from the project root):
     uvicorn api.app:app --reload
 """
 
 import logging
+import math
+from collections import deque
 from contextlib import asynccontextmanager
-from typing import Dict
+from typing import Dict, Optional
 
 from fastapi import FastAPI, HTTPException
 
@@ -48,6 +53,11 @@ logger = logging.getLogger("api.app")
 # below. app_state["models"] holds the loaded artifacts (see model_loader.py
 # for the exact shape); app_state["models_loaded"] is a quick success flag.
 app_state: Dict[str, object] = {"models": None, "models_loaded": False}
+
+# --- Live sensor cache (display only, not used for inference) -----------------
+SENSOR_HISTORY_MAXLEN = 200
+app_state["latest_sensor"] = None  # type: Optional[dict]
+app_state["sensor_history"] = deque(maxlen=SENSOR_HISTORY_MAXLEN)
 
 
 @asynccontextmanager
@@ -149,20 +159,77 @@ def predict_ims_endpoint(request: IMSRequest) -> IMSResponse:
         raise HTTPException(status_code=500, detail=f"IMS prediction failed: {exc}")
 
 
+def _update_sensor_cache(request: SensorVibrationRequest, response: SensorVibrationResponse) -> None:
+    """Store a lightweight, display-only summary of this window: the mean
+    reading per axis (from the already-computed feature summary, not
+    recomputed here) and a combined vibration magnitude.
+
+    The combined magnitude uses per-axis STANDARD DEVIATION, not raw RMS --
+    std is gravity-independent (it measures fluctuation around each axis's
+    own mean), so az's ~9.8 m/s^2 gravity offset doesn't drown out the
+    smaller ax/ay vibration signal. This mirrors the same std-based
+    comparison already used to validate the sensor (running vs. stopped),
+    not a new/different metric invented for the dashboard.
+    """
+    fs = response.feature_summary
+    ax_std, ay_std, az_std = fs["ax"].std, fs["ay"].std, fs["az"].std
+    combined_magnitude = math.sqrt(ax_std**2 + ay_std**2 + az_std**2)
+
+    point = {
+        "device_id": response.device_id,
+        "timestamp": response.timestamp,
+        "sampling_rate_hz": request.sampling_rate_hz,
+        "ax": fs["ax"].mean,
+        "ay": fs["ay"].mean,
+        "az": fs["az"].mean,
+        "rms": combined_magnitude,
+    }
+    app_state["latest_sensor"] = point
+    app_state["sensor_history"].append(point)  # type: ignore[union-attr]
+
+
 @app.post("/sensor-data", response_model=SensorVibrationResponse)
 def sensor_data_endpoint(request: SensorVibrationRequest) -> SensorVibrationResponse:
     """Ingests a raw ESP32/MPU6050 vibration window. Validates input and
     returns diagnostic per-axis features (reusing the IMS feature-
     computation code) -- does NOT run anomaly scoring. See
-    api/inference_sensor.py for why that's deliberately deferred."""
+    api/inference_sensor.py for why that's deliberately deferred.
+
+    Also updates the in-memory latest-reading cache (see
+    _update_sensor_cache) so GET /sensor-data/latest can serve it to a
+    live dashboard. This has no effect on the response returned here.
+    """
     logger.info(
         "Received /sensor-data request (device_id=%s, samples=%d)",
         request.device_id, len(request.samples),
     )
     try:
-        return process_sensor_data(request)
+        response = process_sensor_data(request)
+        _update_sensor_cache(request, response)
+        return response
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         logger.exception("Sensor data processing failed")
         raise HTTPException(status_code=500, detail=f"Sensor data processing failed: {exc}")
+
+
+@app.get("/sensor-data/latest")
+def sensor_data_latest() -> dict:
+    """Returns the most recent /sensor-data reading, plus recent history for
+    charting, for live-display purposes only (e.g. a dashboard). This is a
+    plain in-memory cache: it is empty until at least one /sensor-data POST
+    has been received, and is lost on server restart. It performs no
+    computation of its own and is not part of the inference contract.
+    """
+    latest = app_state.get("latest_sensor")
+    if latest is None:
+        return {
+            "available": False,
+            "reason": "No /sensor-data reading has been received yet.",
+        }
+    return {
+        "available": True,
+        "latest": latest,
+        "history": list(app_state["sensor_history"]),  # type: ignore[arg-type]
+    }
